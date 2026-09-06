@@ -6,7 +6,8 @@
 
 ```text
 ├─ src/
-│  └─ app.py                  Lambda ハンドラ
+│  ├─ app.py                  Lambda ハンドラ
+│  └─ requirements.txt        Lambda の依存パッケージ
 ├─ img/
 │  └─ architechchar.drawio    システム構成図
 ├─ template.yaml              SAM アプリケーションスタック

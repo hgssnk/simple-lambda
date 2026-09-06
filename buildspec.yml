@@ -1,0 +1,23 @@
+version: 0.2
+
+# CodePipeline の Build ステージで実行する処理。
+# src/requirements.txt に記載した依存パッケージを CodeBuild にインストールする。
+# sam build でアプリケーションをビルドし、sam package で Lambda コードを S3 に配置する。
+# 出力した packaged.yaml は、後続の CloudFormation アクションが変更セット作成に使用する。
+
+phases:
+  install:
+    commands:
+      - pip install -r src/requirements.txt
+
+  build:
+    commands:
+      - sam build
+      - >
+        sam package
+        --s3-bucket "$ARTIFACT_BUCKET_NAME"
+        --output-template-file packaged.yaml
+
+artifacts:
+  files:
+    - packaged.yaml

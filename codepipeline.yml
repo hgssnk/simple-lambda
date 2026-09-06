@@ -144,6 +144,53 @@ Resources:
                   - lambda:TagResource
                   - lambda:UntagResource
                 Resource: !Sub "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${AppStackName}-*"
+              - Sid: LambdaEventSourceMapping
+                Effect: Allow
+                Action:
+                  # イベントソースマッピングの ARN は末尾が UUID のため、関数名では絞り込めない。
+                  - lambda:CreateEventSourceMapping
+                  - lambda:DeleteEventSourceMapping
+                  - lambda:GetEventSourceMapping
+                  - lambda:UpdateEventSourceMapping
+                Resource: "*"
+              - Sid: S3Buckets
+                Effect: Allow
+                Action:
+                  - s3:CreateBucket
+                  - s3:DeleteBucket
+                  - s3:PutBucketNotification
+                  - s3:GetBucketNotification
+                  - s3:PutBucketTagging
+                  - s3:GetBucketTagging
+                  - s3:GetBucketLocation
+                Resource: !Sub "arn:aws:s3:::${AppStackName}-*"
+              - Sid: Sns
+                Effect: Allow
+                Action:
+                  - sns:CreateTopic
+                  - sns:DeleteTopic
+                  - sns:GetTopicAttributes
+                  - sns:SetTopicAttributes
+                  - sns:Subscribe
+                  - sns:Unsubscribe
+                  - sns:GetSubscriptionAttributes
+                  - sns:SetSubscriptionAttributes
+                  - sns:ListSubscriptionsByTopic
+                  - sns:TagResource
+                  - sns:UntagResource
+                # トピック ARN・サブスクリプション ARN のいずれもトピック名（= スタック名から始まる）で始まるため、
+                # このワイルドカードで両方をカバーできる。
+                Resource: !Sub "arn:aws:sns:${AWS::Region}:${AWS::AccountId}:${AppStackName}-*"
+              - Sid: Sqs
+                Effect: Allow
+                Action:
+                  - sqs:CreateQueue
+                  - sqs:DeleteQueue
+                  - sqs:GetQueueAttributes
+                  - sqs:SetQueueAttributes
+                  - sqs:TagQueue
+                  - sqs:UntagQueue
+                Resource: !Sub "arn:aws:sqs:${AWS::Region}:${AWS::AccountId}:${AppStackName}-*"
               - Sid: IamForLambda
                 Effect: Allow
                 Action:

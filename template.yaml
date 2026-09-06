@@ -1,0 +1,27 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: Minimal Lambda application that returns Hello World.
+
+Resources:
+  # 入力イベントの内容に関係なく Hello World を返す Lambda 関数。
+  HelloWorldFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      # Lambda のアプリケーションコードを配置するディレクトリ。
+      CodeUri: src/
+      # src/app.py に定義したハンドラ。
+      Handler: app.handler
+      # 実行ランタイム。
+      Runtime: python3.13
+      # Lambda の CPU アーキテクチャ。
+      Architectures:
+        - x86_64
+      # 関数の最大実行時間とメモリサイズ。
+      Timeout: 3
+      MemorySize: 128
+
+Outputs:
+  # デプロイされた Lambda 関数の ARN。
+  HelloWorldFunctionArn:
+    Description: ARN of the Hello World Lambda function.
+    Value: !GetAtt HelloWorldFunction.Arn

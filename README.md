@@ -54,10 +54,10 @@ AWS コンソールから手動で実施する場合
 2. **テンプレートファイルのアップロード** を選択し、`codepipeline.yml` をアップロードする
 3. スタック名に `simple-sam-pipeline` 等を入力する
 4. 次のパラメータを入力する
-  - `ConnectionArn`: GitHub 用の承認済み CodeConnection ARN (CodePipeline > 設定 > 接続から作成できる)
-  - `RepositoryId`: GitHub リポジトリ（`OwnerName/RepositoryName` 形式）
-  - `BranchName`: `main`
-  - `AppStackName`: 任意のスタック名（例: `stack-simple-sam`）
+    - `ConnectionArn`: GitHub 用の承認済み CodeConnection ARN (CodePipeline > 設定 > 接続から作成できる)
+    - `RepositoryId`: GitHub リポジトリ（`OwnerName/RepositoryName` 形式）
+    - `BranchName`: `main`
+    - `AppStackName`: 任意のスタック名（例: `stack-simple-sam`）
 5. `AWS CloudFormation によって IAM リソースが作成される場合があることを承認します。
 ` のチェックボックスにチェックを入れる
 6. スタックを作成する

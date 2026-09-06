@@ -25,4 +25,5 @@ def hello_world_response():
     return {
         "statusCode": 200,
         "body": "Hello, World!",
+        "hoge": "fuga"
     }

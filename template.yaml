@@ -12,7 +12,7 @@ Resources:
       # src/app.py に定義したハンドラ。
       Handler: app.handler
       # 実行ランタイム。
-      Runtime: python3.13
+      Runtime: python3.12
       # Lambda の CPU アーキテクチャ。
       Architectures:
         - x86_64

@@ -50,19 +50,22 @@ flowchart LR
 
 AWS コンソールから手動で実施する場合
 
-1. **初回のみ**: CloudFormation コンソールで **Create stack** → **With new resources (standard)** を選択する
-2. **Upload a template file** を選択し、`codepipeline.yml` をアップロードする
-3. スタック名に `simple-sam-pipeline` を入力する
+1. **初回のみ**: CloudFormation コンソールで **スタックの作成** → **新しいリソースを使用(標準)** を選択する
+2. **テンプレートファイルのアップロード** を選択し、`codepipeline.yml` をアップロードする
+3. スタック名に `simple-sam-pipeline` 等を入力する
 4. 次のパラメータを入力する
-  - `ConnectionArn`: GitHub 用の承認済み CodeConnection ARN
+  - `ConnectionArn`: GitHub 用の承認済み CodeConnection ARN (CodePipeline > 設定 > 接続から作成できる)
   - `RepositoryId`: GitHub リポジトリ（`OwnerName/RepositoryName` 形式）
   - `BranchName`: `main`
   - `AppStackName`: 任意のスタック名（例: `stack-simple-sam`）
-5. IAM リソースの作成を認識するチェックボックスを選択する
+5. `AWS CloudFormation によって IAM リソースが作成される場合があることを承認します。
+` のチェックボックスにチェックを入れる
 6. スタックを作成する
-7. 次のいずれかの方法でパイプラインを起動する
-  - GitHub の `main` ブランチへ push する
-  - CodePipeline コンソールで対象パイプラインを開き、**Release change** を選択する
+7. ステータスが`CREATE_COMPLETE` になることを確認
+8. `CodePipeline` のコンソールへ移動し、パイプラインが開始されていることを確認(初回は自動実行される)
+9. `CreateChangeSet`を選択し、作成・変更されるリソースを確認する
+10. Approveで承認を押下
+11. リソースが展開される
 
 2回目以降は、GitHub の `main` ブランチへの push または CodePipeline の **Release change** で実行できる。
 
@@ -97,7 +100,7 @@ AWS コンソールから手動で実施する場合
 ### ローカルでLambdaの動作確認をする場合
 
 ```bash
-python3.13 -m venv .venv
+python3.12 -m venv .venv
 source .venv/bin/activate
 
 # テンプレートを検証

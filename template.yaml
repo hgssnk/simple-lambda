@@ -1,27 +1,202 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
-Description: Minimal Lambda application that returns Hello World.
+Description: >
+  File routing pipeline that judges files uploaded to S3 by extension and
+  copies them via separate Lambda functions for PDF and non-PDF files.
 
 Resources:
-  # 入力イベントの内容に関係なく Hello World を返す Lambda 関数。
-  HelloWorldFunction:
+  # ---------------------------------------------------------------------
+  # S3
+  # ---------------------------------------------------------------------
+
+  # アップロード用バケット。オブジェクト作成イベントを SnsTopic に通知する。
+  UploadBucket:
+    Type: AWS::S3::Bucket
+    DependsOn: SnsTopicPolicy
+    Properties:
+      BucketName: !Sub "${AWS::StackName}-upload-${AWS::AccountId}"
+      NotificationConfiguration:
+        TopicConfigurations:
+          - Topic: !Ref SnsTopic
+            Event: s3:ObjectCreated:*
+
+  # PDF ファイルのコピー先バケット。
+  PdfBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${AWS::StackName}-pdf-${AWS::AccountId}"
+
+  # PDF 以外のファイルのコピー先バケット。
+  OtherBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${AWS::StackName}-other-${AWS::AccountId}"
+
+  # ---------------------------------------------------------------------
+  # SNS
+  # ---------------------------------------------------------------------
+
+  # UploadBucket のイベントをファンアウトする SNS トピック。
+  # サブスクリプションにフィルターポリシーは持たせず、両方の SQS キューへ無条件で配信する。
+  # 「処理するかどうか」の判定は各 Lambda の SQS イベントソースマッピングの FilterCriteria に委ねる。
+  SnsTopic:
+    Type: AWS::SNS::Topic
+
+  # S3 が SnsTopic に Publish できるようにするトピックポリシー。
+  # UploadBucket の NotificationConfiguration が有効になるより先に存在している必要があるため、
+  # UploadBucket 側に DependsOn を張っている。
+  SnsTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      Topics:
+        - !Ref SnsTopic
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: s3.amazonaws.com
+            Action: sns:Publish
+            Resource: !Ref SnsTopic
+            Condition:
+              ArnLike:
+                aws:SourceArn: !Sub "arn:aws:s3:::${AWS::StackName}-upload-${AWS::AccountId}"
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+
+  # ---------------------------------------------------------------------
+  # SQS
+  # ---------------------------------------------------------------------
+
+  PdfQueue:
+    Type: AWS::SQS::Queue
+
+  OtherQueue:
+    Type: AWS::SQS::Queue
+
+  # SnsTopic が各キューに SendMessage できるようにするキューポリシー。
+  PdfQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+        - !Ref PdfQueue
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: sns.amazonaws.com
+            Action: sqs:SendMessage
+            Resource: !GetAtt PdfQueue.Arn
+            Condition:
+              ArnEquals:
+                aws:SourceArn: !Ref SnsTopic
+
+  OtherQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+        - !Ref OtherQueue
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: sns.amazonaws.com
+            Action: sqs:SendMessage
+            Resource: !GetAtt OtherQueue.Arn
+            Condition:
+              ArnEquals:
+                aws:SourceArn: !Ref SnsTopic
+
+  # SnsTopic のサブスクリプション。フィルターポリシーは持たせず、両方が全件受信する。
+  # RawMessageDelivery を有効にし、S3 イベント通知の JSON がそのまま SQS メッセージ本文になるようにする
+  # （Lambda の FilterCriteria でネストしたフィールドをマッチさせるため）。
+  PdfQueueSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref SnsTopic
+      Protocol: sqs
+      Endpoint: !GetAtt PdfQueue.Arn
+      RawMessageDelivery: true
+
+  OtherQueueSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref SnsTopic
+      Protocol: sqs
+      Endpoint: !GetAtt OtherQueue.Arn
+      RawMessageDelivery: true
+
+  # ---------------------------------------------------------------------
+  # Lambda
+  # ---------------------------------------------------------------------
+
+  # PDF ファイルだけを PdfBucket へコピーする Lambda。
+  # PdfQueue は全件受信するが、FilterCriteria で拡張子が .pdf のものだけ起動する。
+  PdfCopierFunction:
     Type: AWS::Serverless::Function
     Properties:
-      # Lambda のアプリケーションコードを配置するディレクトリ。
-      CodeUri: src/
-      # src/app.py に定義したハンドラ。
+      CodeUri: src/pdf_copier/
       Handler: app.handler
-      # 実行ランタイム。
       Runtime: python3.12
-      # Lambda の CPU アーキテクチャ。
       Architectures:
         - x86_64
-      # 関数の最大実行時間とメモリサイズ。
-      Timeout: 3
+      Timeout: 30
       MemorySize: 128
+      Environment:
+        Variables:
+          DEST_BUCKET_NAME: !Ref PdfBucket
+      Policies:
+        - S3ReadPolicy:
+            BucketName: !Ref UploadBucket
+        - S3WritePolicy:
+            BucketName: !Ref PdfBucket
+      Events:
+        SqsEvent:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt PdfQueue.Arn
+            FilterCriteria:
+              Filters:
+                - Pattern: '{"body":{"Records":{"s3":{"object":{"key":[{"suffix":".pdf"}]}}}}}'
+
+  # PDF 以外のファイルを OtherBucket へコピーする Lambda。
+  # OtherQueue は全件受信するが、FilterCriteria で拡張子が .pdf 以外のものだけ起動する。
+  OtherCopierFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/other_copier/
+      Handler: app.handler
+      Runtime: python3.12
+      Architectures:
+        - x86_64
+      Timeout: 30
+      MemorySize: 128
+      Environment:
+        Variables:
+          DEST_BUCKET_NAME: !Ref OtherBucket
+      Policies:
+        - S3ReadPolicy:
+            BucketName: !Ref UploadBucket
+        - S3WritePolicy:
+            BucketName: !Ref OtherBucket
+      Events:
+        SqsEvent:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt OtherQueue.Arn
+            FilterCriteria:
+              Filters:
+                - Pattern: '{"body":{"Records":{"s3":{"object":{"key":[{"anything-but":{"suffix":".pdf"}}]}}}}}'
 
 Outputs:
-  # デプロイされた Lambda 関数の ARN。
-  HelloWorldFunctionArn:
-    Description: ARN of the Hello World Lambda function.
-    Value: !GetAtt HelloWorldFunction.Arn
+  UploadBucketName:
+    Description: Bucket to upload files to.
+    Value: !Ref UploadBucket
+  PdfBucketName:
+    Description: Destination bucket for PDF files.
+    Value: !Ref PdfBucket
+  OtherBucketName:
+    Description: Destination bucket for non-PDF files.
+    Value: !Ref OtherBucket

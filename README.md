@@ -1,13 +1,17 @@
 # simple-sam
 
-入力イベントの内容に関係なく `Hello, World!` を返す、最小構成の AWS Lambda サンプル。
+S3 にアップロードされたファイルを拡張子で判定し、PDF とそれ以外を別々の Lambda が振り分けてコピーする AWS SAM サンプル。
 
 ## リポジトリ構成
 
 ```text
 ├─ src/
-│  ├─ app.py                  Lambda ハンドラ
-│  └─ requirements.txt        Lambda の依存パッケージ
+│  ├─ pdf_copier/
+│  │  ├─ app.py                PDF 用ハンドラ（PDF Bucket へコピー）
+│  │  └─ requirements.txt      依存パッケージ
+│  └─ other_copier/
+│     ├─ app.py                PDF 以外用ハンドラ（Other Bucket へコピー）
+│     └─ requirements.txt      依存パッケージ
 ├─ img/
 │  └─ architechchar.drawio    システム構成図
 ├─ template.yaml              SAM アプリケーションスタック
@@ -54,12 +58,11 @@ AWS コンソールから手動で実施する場合
 2. **テンプレートファイルのアップロード** を選択し、`codepipeline.yml` をアップロードする
 3. スタック名に `simple-sam-pipeline` 等を入力する
 4. 次のパラメータを入力する
-  - `ConnectionArn`: GitHub 用の承認済み CodeConnection ARN (CodePipeline > 設定 > 接続から作成できる)
-  - `RepositoryId`: GitHub リポジトリ（`OwnerName/RepositoryName` 形式）
-  - `BranchName`: `main`
-  - `AppStackName`: 任意のスタック名（例: `stack-simple-sam`）
-5. `AWS CloudFormation によって IAM リソースが作成される場合があることを承認します。
-` のチェックボックスにチェックを入れる
+    - `ConnectionArn`: GitHub 用の承認済み CodeConnection ARN (CodePipeline > 設定 > 接続から作成できる)
+    - `RepositoryId`: GitHub リポジトリ（`OwnerName/RepositoryName` 形式）
+    - `BranchName`: `main`
+    - `AppStackName`: 任意のスタック名（例: `stack-simple-sam`）
+5. `AWS CloudFormation によって IAM リソースが作成される場合があることを承認します。` のチェックボックスにチェックを入れる
 6. スタックを作成する
 7. ステータスが`CREATE_COMPLETE` になることを確認
 8. `CodePipeline` のコンソールへ移動し、パイプラインが開始されていることを確認(初回は自動実行される)
@@ -69,31 +72,17 @@ AWS コンソールから手動で実施する場合
 
 2回目以降は、GitHub の `main` ブランチへの push または CodePipeline の **Release change** で実行できる。
 
-## Lambda の動作確認
+## 動作確認
 
-デプロイ後、AWS Lambda コンソールのテスト機能からレスポンスを確認する。
+AWS コンソールから手動で確認する場合
 
-1. AWS Lambda コンソールで対象の関数を開く
-2. **Test** タブを開く
-3. 任意のイベント名を入力し、次の JSON をイベントとして保存する
+1. S3 コンソールで Upload Bucket を開く
+2. 任意の PDF ファイルをアップロードする
+3. PDF Bucket を開き、同じファイルがコピーされていることを確認する
+4. PDF 以外の任意のファイルを Upload Bucket にアップロードする
+5. Other Bucket を開き、同じファイルがコピーされていることを確認する
 
-   ```json
-   {
-     "message": "any input"
-   }
-   ```
-
-4. **Test** をクリックして実行する
-5. 実行結果のレスポンスを確認する
-
-入力値に関係なく、次のようなレスポンスが返れば動作確認完了。
-
-```json
-{
-  "statusCode": 200,
-  "body": "Hello, World!"
-}
-```
+反映まで数秒〜数十秒かかる場合がある。反映されない場合は、各 Lambda の CloudWatch Logs でエラーを確認する。
 
 ## 実装メモ
 
@@ -111,5 +100,5 @@ cfn-lint template.yaml codepipeline.yml
 sam build
 
 # ローカル呼び出し
-sam local invoke HelloWorldFunction -e events/event.json
+sam local invoke <FunctionName> -e events/event.json
 ```
